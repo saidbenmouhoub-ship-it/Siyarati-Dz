@@ -10,7 +10,7 @@ type Valuation = { year: number; mileage: number; condition: string; low: number
 type QuoteCoverage = 'thirdSimple' | 'thirdCollision' | 'comprehensive';
 const insurers = ['SAA','CAAT','CIAR','Alliance Assurances','CASH Assurances','Trust Assurances'] as const;
 type Insurer = typeof insurers[number];
-type QuoteRequest = { lastName: string; firstName: string; phone: string; wilaya: string; agency: Insurer; make: string; model: string; year: string; vin: string; cover: QuoteCoverage };
+type QuoteRequest = { name: string; phone: string; wilaya: string; agency: Insurer; make: string; model: string; year: string; vin: string; cover: QuoteCoverage };
 type PaymentDemo = { method: string; rip: string; unlocked: boolean };
 
 const insurerWhatsappNumbers: Record<Insurer, string> = {
@@ -42,7 +42,7 @@ const text = {
     allOk: 'Aucun point renseigné', inspected: 'points vérifiés', okay: 'Conforme', attention: 'Attention', critical: 'Critique', reset: 'Tout réinitialiser',
     categories: { engine: 'Moteur & mécanique', body: 'Carrosserie & châssis', electronics: 'Électricité & confort', documents: 'Documents & historique' },
     insuranceTitle: 'Demander un devis d’assurance', insuranceIntro: 'Choisissez votre agence et préparez une demande avec les informations de votre véhicule.',
-    contactInfo: 'Votre demande', lastName: 'Nom', firstName: 'Prénom', phone: 'Numéro de téléphone', vehicle: 'Véhicule', cover: 'Type de couverture', thirdSimple: 'Tiers Simple', thirdCollision: 'Tiers Collision', comprehensive: 'Tous Risques', agency: 'Agence préférée', requestOffers: 'Envoyer ma demande de devis', quoteResults: 'Résumé de la demande', annual: 'par an, à titre indicatif', quoteNotice: 'Les informations ne seront partagées qu’après ouverture de WhatsApp et confirmation de l’envoi par vos soins.',
+    contactInfo: 'Votre demande', fullName: 'Nom et prénom', phone: 'Numéro de téléphone', vehicle: 'Véhicule', cover: 'Type de couverture', thirdSimple: 'Tiers Simple', thirdCollision: 'Tiers Collision', comprehensive: 'Tous Risques', agency: 'Agence préférée', requestOffers: 'Envoyer ma demande de devis', quoteResults: 'Résumé de la demande', annual: 'par an, à titre indicatif', quoteNotice: 'Les informations ne seront partagées qu’après ouverture de WhatsApp et confirmation de l’envoi par vos soins.',
     vehicleDetails: 'Informations du véhicule', agencyHint: 'Choisissez une seule agence. Le lien WhatsApp sera adressé à son contact.', quoteVehicleHint: 'Si vous avez décodé un VIN, ces champs sont préremplis. Vous pouvez les corriger ou saisir le véhicule manuellement.', quoteModalTitle: 'Confirmez votre demande', quoteModalBody: 'WhatsApp va s’ouvrir avec le message prérempli pour l’agence choisie. Vérifiez les détails puis appuyez sur Envoyer dans WhatsApp.', sendViaWhatsapp: 'Envoyer ma demande via WhatsApp', insurer: 'Agence', modelYearLabel: 'Année-modèle', vinOptional: 'VIN (facultatif)', selectAgency: 'Sélectionner une agence',
     reportTitle: 'Le rapport complet, à portée de main', reportBody: 'Débloquez la synthèse d’inspection, les points à négocier et votre fiche véhicule sur cette page.', unlock: 'Débloquer le rapport', unlocked: 'Rapport de démonstration débloqué', unlockedBody: 'Votre synthèse locale est prête. Les données restent sur cette page et ne constituent pas une expertise certifiée.',
     reportSummary: 'Votre synthèse', reportSummaryBody: 'Examinez les éléments signalés pendant la visite, demandez les factures d’entretien et faites contrôler le véhicule par un professionnel indépendant avant achat.',
@@ -73,7 +73,7 @@ const text = {
     allOk: 'لم تسجل أي نقطة', inspected: 'نقطة مفحوصة', okay: 'سليم', attention: 'انتباه', critical: 'حرج', reset: 'إعادة ضبط الكل',
     categories: { engine: 'المحرك والميكانيك', body: 'الهيكل والطلاء', electronics: 'الكهرباء والراحة', documents: 'الوثائق والسجل' },
     insuranceTitle: 'طلب عرض تأمين', insuranceIntro: 'اختر وكالتك وجهّز طلباً يتضمن معلومات السيارة.',
-    contactInfo: 'طلبك', lastName: 'اللقب', firstName: 'الاسم الشخصي', phone: 'رقم الهاتف', vehicle: 'السيارة', cover: 'نوع التغطية', thirdSimple: 'ضد الغير البسيط', thirdCollision: 'ضد الغير مع التصادم', comprehensive: 'جميع الأخطار', agency: 'الوكالة المفضلة', requestOffers: 'إرسال طلب عرض السعر', quoteResults: 'ملخص الطلب', annual: 'سنوياً، على سبيل التقدير', quoteNotice: 'لن تتم مشاركة المعلومات إلا بعد فتح WhatsApp وتأكيد الإرسال بنفسك.',
+    contactInfo: 'طلبك', fullName: 'الاسم واللقب', phone: 'رقم الهاتف', vehicle: 'السيارة', cover: 'نوع التغطية', thirdSimple: 'ضد الغير البسيط', thirdCollision: 'ضد الغير مع التصادم', comprehensive: 'جميع الأخطار', agency: 'الوكالة المفضلة', requestOffers: 'إرسال طلب عرض السعر', quoteResults: 'ملخص الطلب', annual: 'سنوياً، على سبيل التقدير', quoteNotice: 'لن تتم مشاركة المعلومات إلا بعد فتح WhatsApp وتأكيد الإرسال بنفسك.',
     vehicleDetails: 'معلومات السيارة', agencyHint: 'اختر وكالة واحدة. سيوجه رابط WhatsApp إلى جهة اتصالها.', quoteVehicleHint: 'إذا سبق فك رقم الهيكل، تُملأ هذه الخانات تلقائياً. يمكنك تعديلها أو إدخال السيارة يدوياً.', quoteModalTitle: 'تأكيد الطلب', quoteModalBody: 'سيُفتح WhatsApp برسالة جاهزة للوكالة المختارة. راجع التفاصيل ثم اضغط إرسال داخل WhatsApp.', sendViaWhatsapp: 'إرسال طلبي عبر WhatsApp', insurer: 'الوكالة', modelYearLabel: 'سنة الطراز', vinOptional: 'رقم الهيكل (اختياري)', selectAgency: 'اختر وكالة',
     reportTitle: 'تقرير شامل بين يديك', reportBody: 'افتح ملخص الفحص والنقاط التي تستحق التفاوض وبطاقة السيارة على هذه الصفحة.', unlock: 'فتح التقرير', unlocked: 'تم فتح التقرير التجريبي', unlockedBody: 'ملخصك المحلي جاهز. تبقى البيانات على هذه الصفحة ولا تُعدّ خبرة معتمدة.',
     reportSummary: 'ملخصك', reportSummaryBody: 'راجع النقاط المسجلة خلال الزيارة، واطلب فواتير الصيانة، واستعن بفني مستقل لفحص السيارة قبل الشراء.',
@@ -117,7 +117,7 @@ function App() {
   const decodeSequence = useRef(0);
   const [valYear,setValYear] = useState('2019'); const [mileage,setMileage] = useState('85000'); const [condition,setCondition] = useState('good'); const [valuation,setValuation] = useState<Valuation|null>(null); const [valuationError,setValuationError] = useState('');
   const [checklist,setChecklist] = useState<Record<string,Status>>({});
-  const [quoteLastName,setQuoteLastName] = useState(''); const [quoteFirstName,setQuoteFirstName] = useState(''); const [quotePhone,setQuotePhone] = useState(''); const [quoteWilaya,setQuoteWilaya] = useState('');
+  const [quoteName,setQuoteName] = useState(''); const [quotePhone,setQuotePhone] = useState(''); const [quoteWilaya,setQuoteWilaya] = useState('');
   const [quoteMake,setQuoteMake] = useState(''); const [quoteModel,setQuoteModel] = useState(''); const [quoteYear,setQuoteYear] = useState(''); const [quoteVin,setQuoteVin] = useState('');
   const [cover,setCover] = useState<QuoteCoverage>('thirdSimple'); const [selectedInsurer,setSelectedInsurer] = useState<Insurer|''>('');
   const [quoteError,setQuoteError] = useState(''); const [quoteRequest,setQuoteRequest] = useState<QuoteRequest|null>(null); const [quoteConfirmationOpen,setQuoteConfirmationOpen] = useState(false);
@@ -152,8 +152,7 @@ function App() {
     const message = [
       'Siyarati DZ · ' + t.requestOffers,
       '',
-      `${t.lastName}: ${request.lastName}`,
-      `${t.firstName}: ${request.firstName}`,
+      `${t.fullName}: ${request.name}`,
       `${t.phone}: ${request.phone}`,
       `${t.wilaya}: ${insuranceWilayaLabel(request.wilaya)}`,
       `${t.insurer}: ${request.agency}`,
@@ -214,10 +213,10 @@ function App() {
     const modelYear=Number(quoteYear);
     const validWilaya=Number.isInteger(wilayaNumber)&&wilayaNumber>=1&&wilayaNumber<=58;
     const validYear=Number.isInteger(modelYear)&&modelYear>=1886&&modelYear<=new Date().getFullYear()+1;
-    if(!quoteLastName.trim()||!quoteFirstName.trim()||!validWilaya||!selectedInsurer||!quoteMake.trim()||!quoteModel.trim()||!validYear){setQuoteError(t.invalidQuote);return;}
+    if(!quoteName.trim()||!validWilaya||!selectedInsurer||!quoteMake.trim()||!quoteModel.trim()||!validYear){setQuoteError(t.invalidQuote);return;}
     if(quoteVin.trim()&&!/^[A-HJ-NPR-Z0-9]{17}$/.test(quoteVin.trim().toUpperCase())){setQuoteError(t.invalidVin);return;}
     setQuoteRequest({
-      lastName:quoteLastName.trim(),firstName:quoteFirstName.trim(),phone:quotePhone.trim(),wilaya:quoteWilaya,agency:selectedInsurer,
+      name:quoteName.trim(),phone:quotePhone.trim(),wilaya:quoteWilaya,agency:selectedInsurer,
       make:quoteMake.trim(),model:quoteModel.trim(),year:String(modelYear),vin:quoteVin.trim().toUpperCase(),cover,
     });
     setQuoteConfirmationOpen(true);
@@ -259,7 +258,7 @@ function App() {
           <div className="panel-label">{t.vinLabel} + {t.plateLabel}</div>
           <form onSubmit={identifyVehicle} noValidate>
             <p className="helper">{t.vinOrRegistration}</p><div className="form-grid">
-              <div className="field full"><label htmlFor="vin">{t.vin}</label><input className="input" id="vin" value={vin} onChange={e=>{setVin(e.target.value.toUpperCase());clearVehicleResult(true)}} placeholder={t.vinPlaceholder} maxLength={17} autoCapitalize="characters" data-testid="input-vin" aria-describedby="nhtsa-privacy-note"/></div>
+              <div className="field full"><label htmlFor="vin">{t.vin}</label><input className="input" id="vin" value={vin} onChange={e=>{setVin(e.target.value.toUpperCase());clearVehicleResult()}} placeholder={t.vinPlaceholder} maxLength={17} autoCapitalize="characters" data-testid="input-vin" aria-describedby="nhtsa-privacy-note"/></div>
               <InputField label={t.series} name="series" value={series} onChange={v=>{setSeries(v);clearVehicleResult()}} placeholder={t.seriesPlaceholder} testId="input-registration-series"/>
               <InputField label={t.registrationYear} name="registration-year" value={carYear} onChange={v=>{setCarYear(v);clearVehicleResult()}} type="number" min={1960} max={new Date().getFullYear()} testId="input-registration-year"/>
               <div className="field full"><label htmlFor="car-wilaya">{t.wilaya}</label><select className="input" id="car-wilaya" value={carWilaya} onChange={e=>{setCarWilaya(e.target.value);clearVehicleResult()}} data-testid="select-registration-wilaya"><option value="">{t.choose}</option>{wilayas.map(w=><option key={w} value={w}>{displayWilaya(w)}</option>)}</select></div>
@@ -324,8 +323,7 @@ function App() {
           <form className="panel" onSubmit={submitQuote} noValidate>
             <div className="panel-label">{t.contactInfo}</div>
             <div className="form-grid">
-              <InputField label={t.lastName} name="quote-last-name" value={quoteLastName} onChange={v=>{setQuoteLastName(v);clearQuoteRequest()}} testId="input-quote-last-name" autoComplete="family-name" required/>
-              <InputField label={t.firstName} name="quote-first-name" value={quoteFirstName} onChange={v=>{setQuoteFirstName(v);clearQuoteRequest()}} testId="input-quote-first-name" autoComplete="given-name" required/>
+              <InputField label={t.fullName} name="quote-name" value={quoteName} onChange={v=>{setQuoteName(v);clearQuoteRequest()}} placeholder={isAr?'الاسم واللقب':'Nom et prénom'} testId="input-quote-name" autoComplete="name" required/>
               <InputField label={t.phone} name="quote-phone" value={quotePhone} onChange={v=>{setQuotePhone(v);clearQuoteRequest()}} placeholder="05 55 12 34 56" type="tel" testId="input-quote-phone" dir="ltr" autoComplete="tel" required/>
               <div className="field">
                 <label htmlFor="quote-wilaya">{t.wilaya} (01–58)</label>
@@ -366,8 +364,7 @@ function App() {
             <div className="panel-label">{t.quoteResults}</div>
             <div className="result-title"><ShieldCheck size={16}/><span>{selectedInsurer||t.selectAgency} · {coverageLabel(cover)}</span></div>
             <div className="spec-grid">
-              <div className="spec-cell"><span>{t.lastName}</span><strong>{quoteLastName||t.notProvided}</strong></div>
-              <div className="spec-cell"><span>{t.firstName}</span><strong>{quoteFirstName||t.notProvided}</strong></div>
+              <div className="spec-cell"><span>{t.fullName}</span><strong>{quoteName||t.notProvided}</strong></div>
               <div className="spec-cell"><span>{t.phone}</span><strong dir="ltr">{quotePhone||t.notProvided}</strong></div>
               <div className="spec-cell"><span>{t.wilaya}</span><strong>{quoteWilaya?insuranceWilayaLabel(quoteWilaya):t.notProvided}</strong></div>
               <div className="spec-cell"><span>{t.make}</span><strong>{quoteMake||t.notProvided}</strong></div>
@@ -383,30 +380,10 @@ function App() {
       <section className="section" id="report">
         <div className="section-heading"><div><div className="section-index">05 / {t.navReport.toUpperCase()}</div><h2>{t.reportTitle}</h2></div><p className="section-intro">{t.reportBody}</p></div>
         {!payment?.unlocked?<div className="unlock-banner"><div className="unlock-copy"><strong><LockKeyhole size={15} style={{verticalAlign:'middle',marginInlineEnd:7}}/>{t.reportTitle}</strong><span>{t.reportBody}</span></div><button type="button" className="btn btn-primary" onClick={openModal} data-testid="button-open-payment">{t.unlock}<ArrowUpRight size={14}/></button></div>:
-        <div className="report-unlocked" aria-live="polite" data-testid="status-report-unlocked"><div className="result-title"><BadgeCheck size={18}/>{t.unlocked}</div><p>{t.unlockedBody}</p><h3><FileText size={16} style={{verticalAlign:'middle',marginInlineEnd:8}}/>{t.reportSummary}</h3><p>{t.reportSummaryBody}</p><div className="spec-grid"><div className="spec-cell"><span>{t.inspected}</span><strong>{inspectedCount} / {totalPoints}</strong></div><div className="spec-cell"><span>{t.critical}</span><strong>{counts.crit}</strong></div><div className="spec-cell"><span>{t.attention}</span><strong>{counts.attn}</strong></div><div className="spec-cell"><span>{t.estimation}</span><strong>{valuation?`${formatDzd(valuation.market)} DA`:'—'}</strong></div><div className="spec-cell"><span>{t.vehicle}</span><strong>{[quoteMake,quoteModel].filter(Boolean).join(' ')||vehicle?.data?.model||'—'}</strong></div><div className="spec-cell"><span>{t.wilaya}</span><strong>{quoteWilaya?insuranceWilayaLabel(quoteWilaya):displayWilaya(vehicle?.wilaya||'—')}</strong></div></div><div className="notice" style={{marginTop:15}}><Info size={14}/><span>{t.paymentDone}</span></div></div>}
+        <div className="report-unlocked" aria-live="polite" data-testid="status-report-unlocked"><div className="result-title"><BadgeCheck size={18}/>{t.unlocked}</div><p>{t.unlockedBody}</p><h3><FileText size={16} style={{verticalAlign:'middle',marginInlineEnd:8}}/>{t.reportSummary}</h3><p>{t.reportSummaryBody}</p><div className="spec-grid"><div className="spec-cell"><span>{t.inspected}</span><strong>{inspectedCount} / {totalPoints}</strong></div><div className="spec-cell"><span>{t.critical}</span><strong>{counts.crit}</strong></div><div className="spec-cell"><span>{t.attention}</span><strong>{counts.attn}</strong></div><div className="spec-cell"><span>{t.estimation}</span><strong>{valuation?`${formatDzd(valuation.market)} DA`:'—'}</strong></div><div className="spec-cell"><span>{t.vehicle}</span><strong>{quoteVehicle||vehicle?.data?.model||'—'}</strong></div><div className="spec-cell"><span>{t.wilaya}</span><strong>{displayWilaya(quoteWilaya||vehicle?.wilaya||'—')}</strong></div></div><div className="notice" style={{marginTop:15}}><Info size={14}/><span>{t.paymentDone}</span></div></div>}
       </section>
       <footer className="footer"><div className="footer-inner"><div><strong>Siyarati DZ</strong> · {t.footerMade}</div><div>{t.footerDemo}</div></div></footer>
     </div>
-    {quoteConfirmationOpen&&quoteRequest&&<div className="modal-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setQuoteConfirmationOpen(false)}}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="quote-confirmation-title" data-testid="dialog-quote-confirmation">
-      <div className="modal-head"><div><h3 id="quote-confirmation-title">{t.quoteModalTitle}</h3><p>{t.quoteModalBody}</p></div><button className="icon-button" type="button" aria-label={t.close} onClick={()=>setQuoteConfirmationOpen(false)} data-testid="button-close-quote-confirmation"><X size={16}/></button></div>
-      <div className="spec-grid">
-        <div className="spec-cell"><span>{t.lastName}</span><strong>{quoteRequest.lastName}</strong></div>
-        <div className="spec-cell"><span>{t.firstName}</span><strong>{quoteRequest.firstName}</strong></div>
-        <div className="spec-cell"><span>{t.phone}</span><strong dir="ltr">{quoteRequest.phone}</strong></div>
-        <div className="spec-cell"><span>{t.wilaya}</span><strong>{insuranceWilayaLabel(quoteRequest.wilaya)}</strong></div>
-        <div className="spec-cell"><span>{t.insurer}</span><strong>{quoteRequest.agency}</strong></div>
-        <div className="spec-cell"><span>{t.cover}</span><strong>{coverageLabel(quoteRequest.cover)}</strong></div>
-        <div className="spec-cell"><span>{t.make}</span><strong>{quoteRequest.make}</strong></div>
-        <div className="spec-cell"><span>{t.model}</span><strong>{quoteRequest.model}</strong></div>
-        <div className="spec-cell"><span>{t.modelYearLabel}</span><strong>{quoteRequest.year}</strong></div>
-        {quoteRequest.vin&&<div className="spec-cell" style={{gridColumn:'1/-1'}}><span>{t.vinLabel}</span><strong dir="ltr">{quoteRequest.vin}</strong></div>}
-      </div>
-      <div className="notice" style={{marginTop:15}}><Info size={15}/><span>{t.quoteNotice}</span></div>
-      <div className="modal-footer">
-        <button type="button" className="btn btn-quiet" onClick={()=>setQuoteConfirmationOpen(false)} data-testid="button-cancel-quote-confirmation">{t.cancel}</button>
-        <a className="btn btn-primary" href={buildWhatsAppUrl(quoteRequest)} target="_blank" rel="noopener noreferrer" data-testid="button-send-whatsapp"><MessageCircle size={15}/>{t.sendViaWhatsapp}<ArrowUpRight size={14}/></a>
-      </div>
-    </div></div>}
     {modalOpen&&<div className="modal-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setModalOpen(false)}}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="payment-title">
       <div className="modal-head"><div><h3 id="payment-title">{t.modalTitle}</h3><p>{t.modalSubtitle}</p></div><button className="icon-button" type="button" aria-label={t.close} onClick={()=>setModalOpen(false)} data-testid="button-close-payment"><X size={16}/></button></div>
       <div className="panel-label">{isAr?'اختر طريقة':'MODE DE DÉMONSTRATION'}</div>
