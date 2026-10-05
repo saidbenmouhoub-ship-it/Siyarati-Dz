@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Siyarati DZ"
+description = "Une plateforme d'inspection et d'estimation automobile conçue pour le marché algérien, avec décodage indicatif du VIN, évaluation en dinars, checklist de 50 points, comparaison de devis d'assurance et démonstration de paiements locaux."
+version = "1.0.0"
+id = "artifacts/siyarati-dz"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20694
+
+[services.development]
+run = "pnpm --filter @workspace/siyarati-dz run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/siyarati-dz", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/siyarati-dz/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20694"
+BASE_PATH = "/"
