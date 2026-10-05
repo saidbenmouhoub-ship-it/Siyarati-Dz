@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Calculator, CarFront, Check, ChevronRight, ClipboardCheck, Copy, FileText, Info, LockKeyhole, ShieldCheck, X } from 'lucide-react';
+import { useMemo, useRef, useState } from 'react';
+import { getDecodeVinQueryKey, useDecodeVin, type VinDecodeResponse } from '@workspace/api-client-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Calculator, CarFront, Check, ChevronRight, ClipboardCheck, Copy, FileText, Info, LoaderCircle, LockKeyhole, ShieldCheck, X } from 'lucide-react';
 
 type Lang = 'fr' | 'ar';
 type Status = 'ok' | 'attn' | 'crit';
 type Category = 'engine' | 'body' | 'electronics' | 'documents';
-type Vehicle = { vin: string; series: string; year: string; wilaya: string; make: string; model: string; trim: string; engine: string; equipment: string[] };
+type Vehicle = { data: VinDecodeResponse | null; series: string; registrationYear: string; wilaya: string };
 type Valuation = { year: number; mileage: number; condition: string; low: number; market: number; high: number };
 type QuoteRequest = { name: string; phone: string; wilaya: string; vehicle: string; cover: string; insurers: string[] };
 type PaymentDemo = { method: string; rip: string; unlocked: boolean };
@@ -16,10 +17,13 @@ const text = {
     heroBody: 'Les bons réflexes avant de signer. Identifiez, estimez et inspectez votre prochain véhicule avec des repères pensés pour le marché algérien.',
     start: 'Commencer l’inspection', estimate: 'Estimer un prix', health: 'ÉTAT DU CONTRÔLE', carLabel: 'Votre prochain véhicule', carMeta: 'Inspection personnelle · Algérie', score: 'À vérifier',
     idTitle: 'Identifier le véhicule', idIntro: 'VIN ou immatriculation : rassemblez les informations utiles avant votre visite.',
-    vin: 'Numéro VIN (17 caractères)', series: 'Série d’immatriculation', year: 'Année', wilaya: 'Wilaya', seriesPlaceholder: 'Ex. 123 · 456 · 78', vinPlaceholder: 'Ex. VF1RFB00… (17 caractères)', choose: 'Sélectionner',
+    vin: 'Numéro VIN (17 caractères)', series: 'Série d’immatriculation', year: 'Année', registrationYear: 'Année d’immatriculation', wilaya: 'Wilaya', seriesPlaceholder: 'Ex. 123 · 456 · 78', vinPlaceholder: 'Ex. 5UXWX7C5… (17 caractères)', choose: 'Sélectionner',
     vinOrRegistration: 'Saisissez un VIN valide ou renseignez les trois champs d’immatriculation.', notProvided: 'Non renseigné',
-    decode: 'Afficher la fiche indicative', localDemo: 'Les caractéristiques affichées sont des exemples locaux de démonstration. Il ne s’agit pas d’un décodeur VIN validé ni d’une vérification officielle.',
-    sheet: 'Fiche véhicule indicative', engine: 'Motorisation', trim: 'Finition d’origine', equipment: 'Équipements standards', country: 'Origine', fuel: 'Carburant', gearbox: 'Transmission', fuelTransmission: 'Diesel · Manuelle', equipmentValues: 'ABS · Airbags frontaux · Direction assistée · Vitres électriques avant', sample: 'Exemple de démonstration',
+    decode: 'Décoder avec la NHTSA', decodeLoading: 'Interrogation de la NHTSA…', decodeFailed: 'Impossible de joindre le service NHTSA. Réessayez dans un instant.',
+    sheet: 'Données constructeur vPIC', registrationOnly: 'Immatriculation enregistrée', noManufacturerFound: 'Aucun décodage constructeur complet',
+    registrationNotice: 'La NHTSA ne décode pas les immatriculations algériennes. Saisissez le VIN pour demander les données constructeur.',
+    localDemo: 'Le VIN saisi est transmis à l’API publique vPIC de la NHTSA. La couverture varie selon le constructeur, surtout hors des États-Unis. Un champ vide signifie « donnée non disponible », pas « équipement absent ». Vérifiez toujours les documents.',
+    make: 'Marque', model: 'Modèle', modelSeries: 'Série constructeur', engine: 'Motorisation', trim: 'Finition', equipment: 'Équipements de sécurité retournés par vPIC', country: 'Pays d’assemblage', plant: 'Usine / lieu d’assemblage', fuel: 'Carburant', gearbox: 'Transmission', bodyClass: 'Type de carrosserie', apiNotReturned: 'Non renseigné par vPIC', noSafetyData: 'Aucune donnée de sécurité retournée', sourceNhtsa: 'Source : NHTSA vPIC',
     valuationTitle: 'Une fourchette, pas une promesse', valuationIntro: 'Un repère rapide en dinars, basé sur l’année, le kilométrage et l’état déclaré.',
     calcTitle: 'Paramètres d’estimation', mileage: 'Kilométrage (km)', condition: 'État général', excellent: 'Très bon', good: 'Bon', fair: 'À prévoir', calculate: 'Calculer l’estimation', estimation: 'Estimation indicative', market: 'Valeur centrale', low: 'Fourchette basse', high: 'Fourchette haute', rangeDisclaimer: 'Repère de démonstration uniquement · le marché réel varie selon la version, l’historique et la région.',
     inspectionTitle: 'Votre inspection en 50 points', inspectionIntro: 'Faites le tour du véhicule. Chaque point passe de conforme à attention ou critique.',
@@ -29,7 +33,7 @@ const text = {
     contactInfo: 'Vos informations', fullName: 'Nom complet', phone: 'Téléphone', vehicle: 'Véhicule', cover: 'Formule souhaitée', thirdParty: 'Tiers', comprehensive: 'Tous risques', providers: 'Assureurs à inclure', requestOffers: 'Afficher les offres simulées', insurerHint: 'Choisissez au moins un assureur.', quoteResults: 'Offres indicatives simulées', annual: 'par an, à titre indicatif', quoteNotice: 'Simulation locale uniquement. Aucune compagnie d’assurance n’a été contactée et ces montants ne sont pas des devis.',
     reportTitle: 'Le rapport complet, à portée de main', reportBody: 'Débloquez la synthèse d’inspection, les points à négocier et votre fiche véhicule sur cette page.', unlock: 'Débloquer le rapport', unlocked: 'Rapport de démonstration débloqué', unlockedBody: 'Votre synthèse locale est prête. Les données restent sur cette page et ne constituent pas une expertise certifiée.',
     reportSummary: 'Votre synthèse', reportSummaryBody: 'Examinez les éléments signalés pendant la visite, demandez les factures d’entretien et faites contrôler le véhicule par un professionnel indépendant avant achat.',
-    footerDemo: 'Siyarati DZ est une démonstration locale. Aucune donnée n’est transmise.', footerMade: 'Des repères utiles, sans fausse promesse.',
+    footerDemo: 'Le VIN est transmis à NHTSA uniquement pour le décodage. Les autres données de cette démonstration restent locales.', footerMade: 'Des repères utiles, sans fausse promesse.',
     modalTitle: 'Débloquer votre rapport', modalSubtitle: 'Choisissez une méthode de démonstration. Aucun paiement ne sera effectué.',
     methods: { baridi: 'BaridiMob', edahabia: 'Edahabia', flexy: 'Flexy' }, ripTitle: 'RIP fictif de démonstration', copy: 'Copier', copied: 'Copié', fakeRip: '000-000-000000000000-DEMO',
     payNotice: 'Démo uniquement : aucune donnée de carte, compte ou paiement n’est collectée. Rien ne sera débité. Ce RIP est explicitement fictif.',
@@ -43,10 +47,13 @@ const text = {
     heroBody: 'خطوات عملية قبل التوقيع. تعرّف على سيارتك القادمة، وقدّر سعرها وافحصها بمؤشرات تناسب السوق الجزائري.',
     start: 'ابدأ الفحص', estimate: 'قدّر السعر', health: 'حالة الفحص', carLabel: 'سيارتك القادمة', carMeta: 'فحص شخصي · الجزائر', score: 'تحتاج إلى التحقق',
     idTitle: 'التعرّف على السيارة', idIntro: 'رقم الهيكل أو التسجيل: اجمع المعلومات المهمة قبل المعاينة.',
-    vin: 'رقم الهيكل VIN (17 خانة)', series: 'سلسلة التسجيل', year: 'السنة', wilaya: 'الولاية', seriesPlaceholder: 'مثال: 123 · 456 · 78', vinPlaceholder: 'مثال: VF1RFB00… (17 خانة)', choose: 'اختر',
+    vin: 'رقم الهيكل VIN (17 خانة)', series: 'سلسلة التسجيل', year: 'السنة', registrationYear: 'سنة التسجيل', wilaya: 'الولاية', seriesPlaceholder: 'مثال: 123 · 456 · 78', vinPlaceholder: 'مثال: 5UXWX7C5… (17 خانة)', choose: 'اختر',
     vinOrRegistration: 'أدخل رقم هيكل صحيحاً أو أكمل حقول التسجيل الثلاثة.', notProvided: 'غير محدد',
-    decode: 'عرض بطاقة السيارة التقديرية', localDemo: 'المواصفات المعروضة أمثلة محلية تجريبية. هذه ليست خدمة موثّقة لفك رقم الهيكل ولا تحققاً رسمياً.',
-    sheet: 'بطاقة سيارة تقديرية', engine: 'المحرك', trim: 'الفئة الأصلية', equipment: 'التجهيزات القياسية', country: 'المنشأ', fuel: 'الوقود', gearbox: 'ناقل الحركة', fuelTransmission: 'ديزل · يدوي', equipmentValues: 'نظام ABS · وسائد هوائية أمامية · توجيه مؤازر · نوافذ أمامية كهربائية', sample: 'مثال تجريبي',
+    decode: 'فك الرقم عبر NHTSA', decodeLoading: 'جارٍ الاتصال بـ NHTSA…', decodeFailed: 'تعذر الاتصال بخدمة NHTSA. حاول مجدداً بعد قليل.',
+    sheet: 'بيانات الشركة المصنّعة من vPIC', registrationOnly: 'تم إدخال بيانات التسجيل', noManufacturerFound: 'لم يتم العثور على بيانات كاملة للشركة المصنّعة',
+    registrationNotice: 'لا تفك NHTSA أرقام التسجيل الجزائرية. أدخل رقم الهيكل لطلب بيانات الشركة المصنّعة.',
+    localDemo: 'يُرسل رقم الهيكل إلى واجهة vPIC العامة التابعة لـ NHTSA. تختلف التغطية حسب الشركة المصنّعة، خصوصاً خارج الولايات المتحدة. تعني الخانة الفارغة أن البيانات غير متاحة، لا أن التجهيز غير موجود. تحقّق دائماً من الوثائق.',
+    make: 'العلامة', model: 'الطراز', modelSeries: 'سلسلة الشركة المصنّعة', engine: 'المحرك', trim: 'الفئة', equipment: 'تجهيزات السلامة التي أعادتها vPIC', country: 'بلد التجميع', plant: 'المصنع / موقع التجميع', fuel: 'الوقود', gearbox: 'ناقل الحركة', bodyClass: 'نوع الهيكل', apiNotReturned: 'لم ترد قيمة من vPIC', noSafetyData: 'لم ترد بيانات عن السلامة', sourceNhtsa: 'المصدر: NHTSA vPIC',
     valuationTitle: 'نطاق سعري لا وعد بالبيع', valuationIntro: 'مؤشر سريع بالدينار حسب السنة والمسافة المقطوعة والحالة المعلنة.',
     calcTitle: 'معايير التقييم', mileage: 'المسافة المقطوعة (كم)', condition: 'الحالة العامة', excellent: 'جيدة جداً', good: 'جيدة', fair: 'تحتاج إلى صيانة', calculate: 'احسب التقدير', estimation: 'تقدير إرشادي', market: 'القيمة المتوسطة', low: 'الحد الأدنى', high: 'الحد الأعلى', rangeDisclaimer: 'مؤشر تجريبي فقط · يختلف السوق الفعلي حسب النسخة والسجل والمنطقة.',
     inspectionTitle: 'قائمة فحص من 50 نقطة', inspectionIntro: 'افحص السيارة نقطةً نقطة. اختر سليم أو انتباه أو حرج لكل بند.',
@@ -56,7 +63,7 @@ const text = {
     contactInfo: 'بياناتك', fullName: 'الاسم الكامل', phone: 'رقم الهاتف', vehicle: 'السيارة', cover: 'التغطية المطلوبة', thirdParty: 'ضد الغير', comprehensive: 'شامل', providers: 'الشركات المراد تضمينها', requestOffers: 'عرض الأسعار المحاكاة', insurerHint: 'اختر شركة تأمين واحدة على الأقل.', quoteResults: 'عروض تقديرية محاكاة', annual: 'سنوياً، على سبيل التقدير', quoteNotice: 'محاكاة محلية فقط. لم يتم التواصل مع أي شركة تأمين وهذه المبالغ ليست عروض أسعار.',
     reportTitle: 'تقرير شامل بين يديك', reportBody: 'افتح ملخص الفحص والنقاط التي تستحق التفاوض وبطاقة السيارة على هذه الصفحة.', unlock: 'فتح التقرير', unlocked: 'تم فتح التقرير التجريبي', unlockedBody: 'ملخصك المحلي جاهز. تبقى البيانات على هذه الصفحة ولا تُعدّ خبرة معتمدة.',
     reportSummary: 'ملخصك', reportSummaryBody: 'راجع النقاط المسجلة خلال الزيارة، واطلب فواتير الصيانة، واستعن بفني مستقل لفحص السيارة قبل الشراء.',
-    footerDemo: 'سيارتي DZ عرض تجريبي محلي. لا يتم إرسال أي بيانات.', footerMade: 'مؤشرات مفيدة بلا وعود زائفة.',
+    footerDemo: 'يُرسل رقم الهيكل إلى NHTSA لغرض فكّه فقط. تبقى بقية بيانات هذا العرض التجريبي محلية.', footerMade: 'مؤشرات مفيدة بلا وعود زائفة.',
     modalTitle: 'فتح تقريرك', modalSubtitle: 'اختر طريقة تجريبية. لن يتم أي دفع.',
     methods: { baridi: 'بريدي موب', edahabia: 'الذهبية', flexy: 'فليكسي' }, ripTitle: 'RIP تجريبي غير حقيقي', copy: 'نسخ', copied: 'تم النسخ', fakeRip: '000-000-000000000000-DEMO',
     payNotice: 'للتجربة فقط: لا نجمع بيانات بطاقة أو حساب أو دفع. لن يتم خصم أي مبلغ. رقم RIP خيالي بوضوح.',
@@ -93,7 +100,8 @@ function InputField({ label, name, value, onChange, placeholder, type = 'text', 
 function App() {
   const [lang,setLang] = useState<Lang>('fr');
   const [vin,setVin] = useState(''); const [series,setSeries] = useState(''); const [carYear,setCarYear] = useState(''); const [carWilaya,setCarWilaya] = useState('');
-  const [vehicle,setVehicle] = useState<Vehicle|null>(null); const [vehicleError,setVehicleError] = useState('');
+  const [vehicle,setVehicle] = useState<Vehicle|null>(null); const [vehicleError,setVehicleError] = useState(''); const [decodeError,setDecodeError] = useState('');
+  const decodeSequence = useRef(0);
   const [valYear,setValYear] = useState('2019'); const [mileage,setMileage] = useState('85000'); const [condition,setCondition] = useState('good'); const [valuation,setValuation] = useState<Valuation|null>(null); const [valuationError,setValuationError] = useState('');
   const [checklist,setChecklist] = useState<Record<string,Status>>({});
   const [quoteName,setQuoteName] = useState(''); const [quotePhone,setQuotePhone] = useState(''); const [quoteWilaya,setQuoteWilaya] = useState(''); const [quoteVehicle,setQuoteVehicle] = useState(''); const [cover,setCover] = useState('third'); const [selectedInsurers,setSelectedInsurers] = useState<string[]>([]); const [quoteError,setQuoteError] = useState(''); const [quoteRequest,setQuoteRequest] = useState<QuoteRequest|null>(null);
@@ -106,15 +114,33 @@ function App() {
   const score = Math.round((counts.ok + counts.attn*.55 + counts.crit*.1) / totalPoints * 100);
   const formatDzd = (v:number) => `${Math.round(v/1000).toLocaleString('fr-FR')} 000`;
   const displayWilaya = (name:string) => isAr ? (wilayaArabic[name]||name) : name;
-  function identifyVehicle(e:React.FormEvent<HTMLFormElement>) {
-    e.preventDefault(); setVehicleError('');
-    const normalized=vin.trim().toUpperCase();
+  const normalizedVin = vin.trim().toUpperCase();
+  const vinQuery = useDecodeVin(
+    { vin: normalizedVin },
+    { query: { enabled: false, queryKey: getDecodeVinQueryKey({ vin: normalizedVin }), retry: false } },
+  );
+  function clearVehicleResult() {
+    decodeSequence.current += 1;
+    setVehicle(null);
+    setVehicleError('');
+    setDecodeError('');
+  }
+  async function identifyVehicle(e:React.FormEvent<HTMLFormElement>) {
+    if(vinQuery.isFetching)return;
+    e.preventDefault(); setVehicleError(''); setDecodeError(''); setVehicle(null);
+    const normalized=normalizedVin;
     if(normalized && !/^[A-HJ-NPR-Z0-9]{17}$/.test(normalized)){setVehicleError(t.invalidVin);return;}
     const hasRegistration=Boolean(series.trim()&&carYear&&carWilaya);
     if(!normalized&&!hasRegistration){setVehicleError(t.invalidRegistration);return;}
     const registrationYear=Number(carYear);
     if(hasRegistration&&(!Number.isInteger(registrationYear)||registrationYear<1960||registrationYear>new Date().getFullYear())){setVehicleError(t.invalidRegistration);return;}
-    setVehicle({vin:normalized,series:series.trim(),year:carYear,wilaya:carWilaya,make:'Renault',model:'Clio',trim:'Expression',engine:'1.5 dCi · 85 ch',equipment:['ABS','Airbags frontaux','Direction assistée','Vitres électriques avant']});
+    const registration={series:series.trim(),registrationYear:carYear,wilaya:carWilaya};
+    if(!normalized){setVehicle({data:null,...registration});return;}
+    const requestSequence=++decodeSequence.current;
+    const result=await vinQuery.refetch();
+    if(requestSequence!==decodeSequence.current)return;
+    if(result.error||!result.data){setDecodeError(t.decodeFailed);return;}
+    setVehicle({data:result.data,...registration});
   }
   function calculateValue(e:React.FormEvent<HTMLFormElement>) {
     e.preventDefault();setValuationError('');
@@ -170,22 +196,34 @@ function App() {
           <div className="panel-label">{t.vinLabel} + {t.plateLabel}</div>
           <form onSubmit={identifyVehicle} noValidate>
             <p className="helper">{t.vinOrRegistration}</p><div className="form-grid">
-              <div className="field full"><label htmlFor="vin">{t.vin}</label><input className="input" id="vin" value={vin} onChange={e=>{setVin(e.target.value.toUpperCase());setVehicle(null)}} placeholder={t.vinPlaceholder} maxLength={17} autoCapitalize="characters" data-testid="input-vin"/></div>
-              <InputField label={t.series} name="series" value={series} onChange={v=>{setSeries(v);setVehicle(null)}} placeholder={t.seriesPlaceholder} testId="input-registration-series"/>
-              <InputField label={t.year} name="registration-year" value={carYear} onChange={v=>{setCarYear(v);setVehicle(null)}} type="number" min={1960} max={new Date().getFullYear()} testId="input-registration-year"/>
-              <div className="field full"><label htmlFor="car-wilaya">{t.wilaya}</label><select className="input" id="car-wilaya" value={carWilaya} onChange={e=>{setCarWilaya(e.target.value);setVehicle(null)}} data-testid="select-registration-wilaya"><option value="">{t.choose}</option>{wilayas.map(w=><option key={w} value={w}>{displayWilaya(w)}</option>)}</select></div>
+              <div className="field full"><label htmlFor="vin">{t.vin}</label><input className="input" id="vin" value={vin} onChange={e=>{setVin(e.target.value.toUpperCase());clearVehicleResult()}} placeholder={t.vinPlaceholder} maxLength={17} autoCapitalize="characters" data-testid="input-vin" aria-describedby="nhtsa-privacy-note"/></div>
+              <InputField label={t.series} name="series" value={series} onChange={v=>{setSeries(v);clearVehicleResult()}} placeholder={t.seriesPlaceholder} testId="input-registration-series"/>
+              <InputField label={t.registrationYear} name="registration-year" value={carYear} onChange={v=>{setCarYear(v);clearVehicleResult()}} type="number" min={1960} max={new Date().getFullYear()} testId="input-registration-year"/>
+              <div className="field full"><label htmlFor="car-wilaya">{t.wilaya}</label><select className="input" id="car-wilaya" value={carWilaya} onChange={e=>{setCarWilaya(e.target.value);clearVehicleResult()}} data-testid="select-registration-wilaya"><option value="">{t.choose}</option>{wilayas.map(w=><option key={w} value={w}>{displayWilaya(w)}</option>)}</select></div>
             </div>
             {vehicleError&&<p className="error-text" role="alert" data-testid="error-vehicle">{vehicleError}</p>}
-            <div className="form-actions"><button type="submit" className="btn btn-primary" data-testid="button-identify-vehicle"><CarFront size={15}/>{t.decode}<ChevronRight size={14}/></button></div>
+            {decodeError&&<p className="error-text" role="alert" data-testid="status-vin-error">{decodeError}</p>}
+            <div className="form-actions"><button type="submit" className="btn btn-primary" disabled={vinQuery.isFetching} data-testid="button-identify-vehicle">{vinQuery.isFetching?<LoaderCircle size={15} className="animate-spin"/>:<CarFront size={15}/ >}{vinQuery.isFetching?t.decodeLoading:t.decode}<ChevronRight size={14}/></button></div>
           </form>
-          {vehicle&&<div className="result-box" aria-live="polite" data-testid="result-vehicle-sheet"><div className="result-title"><BadgeCheck size={16}/>{vehicle.make} {vehicle.model} · {t.sheet} · {t.sample}</div><div className="spec-grid">
-            <div className="spec-cell"><span>{t.engine}</span><strong>{vehicle.engine}</strong></div><div className="spec-cell"><span>{t.trim}</span><strong>{vehicle.trim}</strong></div><div className="spec-cell"><span>{t.yearLabel}</span><strong>{vehicle.year||t.notProvided}</strong></div>
-            <div className="spec-cell"><span>{t.plateLabel}</span><strong>{vehicle.series||t.notProvided}</strong></div><div className="spec-cell"><span>{t.wilaya}</span><strong>{vehicle.wilaya?displayWilaya(vehicle.wilaya):t.notProvided}</strong></div><div className="spec-cell"><span>{t.fuel} / {t.gearbox}</span><strong>{t.fuelTransmission}</strong></div>
-            <div className="spec-cell" style={{gridColumn:'1/-1'}}><span>{t.equipment}</span><strong>{t.equipmentValues}</strong></div>
-          </div></div>}
+          {vehicle&&<div className="result-box" aria-live="polite" data-testid="result-vehicle-sheet">
+            <div className="result-title">{vehicle.data?.decoded?<BadgeCheck size={16}/>:<Info size={16}/>}<span>{vehicle.data?.decoded?`${vehicle.data.make} ${vehicle.data.model} · ${t.sheet}`:vehicle.data?t.noManufacturerFound:t.registrationOnly}</span></div>
+            {vehicle.data&&<><div className="spec-grid">
+              {[
+                [t.make,vehicle.data.make],[t.model,vehicle.data.model],[t.yearLabel,vehicle.data.modelYear],
+                [t.engine,vehicle.data.engine],[t.trim,vehicle.data.trim],[t.modelSeries,vehicle.data.series],
+                [t.fuel,vehicle.data.fuelType],[t.gearbox,vehicle.data.transmission],[t.bodyClass,vehicle.data.bodyClass],
+                [t.country,vehicle.data.assemblyCountry],[t.plant,vehicle.data.assemblyPlant],
+                [t.series,vehicle.series||null],[t.registrationYear,vehicle.registrationYear||null],[t.wilaya,vehicle.wilaya?displayWilaya(vehicle.wilaya):null],
+              ].map(([label,value])=><div className="spec-cell" key={label}><span>{label}</span><strong>{value||t.apiNotReturned}</strong></div>)}
+              <div className="spec-cell" style={{gridColumn:'1/-1'}}><span>{t.equipment}</span><strong>{vehicle.data.safetyEquipment.join(' · ')||t.noSafetyData}</strong></div>
+            </div>
+            {vehicle.data.errorMessage&&vehicle.data.errorCode!=='0'&&<p className="helper" data-testid="text-vin-api-message">{vehicle.data.errorMessage}</p>}
+            <a className="helper" href="https://vpic.nhtsa.dot.gov/api/" target="_blank" rel="noreferrer" data-testid="link-nhtsa-source">{t.sourceNhtsa} · {vehicle.data.vin}</a></>}
+            {!vehicle.data&&<><div className="spec-grid"><div className="spec-cell"><span>{t.plateLabel}</span><strong>{vehicle.series}</strong></div><div className="spec-cell"><span>{t.registrationYear}</span><strong>{vehicle.registrationYear}</strong></div><div className="spec-cell"><span>{t.wilaya}</span><strong>{displayWilaya(vehicle.wilaya)}</strong></div></div><div className="notice"><Info size={15}/><span>{t.registrationNotice}</span></div></>}
+          </div>}
         </div><div className="panel" style={{display:'flex',flexDirection:'column',justifyContent:'space-between',gap:18}}>
           <div><div className="panel-label">{isAr?'كيف تقرأ بياناتك':'À SAVOIR AVANT DE DÉCODER'}</div><h3 style={{fontSize:20,margin:'0 0 10px',letterSpacing:'-.5px'}}>{isAr?'رقم الهيكل ليس كل القصة':'Un numéro ne raconte pas tout.'}</h3><p className="section-intro" style={{maxWidth:400}}>{isAr?'استخدم رقم الهيكل للمقارنة مع الوثائق، وافحص السيارة ميدانياً.':'Comparez toujours le VIN aux documents du véhicule et vérifiez les éléments sur place.'}</p></div>
-          <div className="notice"><Info size={15}/><span>{t.localDemo}</span></div>
+          <div className="notice" id="nhtsa-privacy-note"><Info size={15}/><span>{t.localDemo}</span></div>
         </div></div>
       </section>
 
@@ -236,7 +274,7 @@ function App() {
       <section className="section" id="report">
         <div className="section-heading"><div><div className="section-index">05 / {t.navReport.toUpperCase()}</div><h2>{t.reportTitle}</h2></div><p className="section-intro">{t.reportBody}</p></div>
         {!payment?.unlocked?<div className="unlock-banner"><div className="unlock-copy"><strong><LockKeyhole size={15} style={{verticalAlign:'middle',marginInlineEnd:7}}/>{t.reportTitle}</strong><span>{t.reportBody}</span></div><button type="button" className="btn btn-primary" onClick={openModal} data-testid="button-open-payment">{t.unlock}<ArrowUpRight size={14}/></button></div>:
-        <div className="report-unlocked" aria-live="polite" data-testid="status-report-unlocked"><div className="result-title"><BadgeCheck size={18}/>{t.unlocked}</div><p>{t.unlockedBody}</p><h3><FileText size={16} style={{verticalAlign:'middle',marginInlineEnd:8}}/>{t.reportSummary}</h3><p>{t.reportSummaryBody}</p><div className="spec-grid"><div className="spec-cell"><span>{t.inspected}</span><strong>{inspectedCount} / {totalPoints}</strong></div><div className="spec-cell"><span>{t.critical}</span><strong>{counts.crit}</strong></div><div className="spec-cell"><span>{t.attention}</span><strong>{counts.attn}</strong></div><div className="spec-cell"><span>{t.estimation}</span><strong>{valuation?`${formatDzd(valuation.market)} DA`:'—'}</strong></div><div className="spec-cell"><span>{t.vehicle}</span><strong>{quoteVehicle||vehicle?.model||'—'}</strong></div><div className="spec-cell"><span>{t.wilaya}</span><strong>{displayWilaya(quoteWilaya||vehicle?.wilaya||'—')}</strong></div></div><div className="notice" style={{marginTop:15}}><Info size={14}/><span>{t.paymentDone}</span></div></div>}
+        <div className="report-unlocked" aria-live="polite" data-testid="status-report-unlocked"><div className="result-title"><BadgeCheck size={18}/>{t.unlocked}</div><p>{t.unlockedBody}</p><h3><FileText size={16} style={{verticalAlign:'middle',marginInlineEnd:8}}/>{t.reportSummary}</h3><p>{t.reportSummaryBody}</p><div className="spec-grid"><div className="spec-cell"><span>{t.inspected}</span><strong>{inspectedCount} / {totalPoints}</strong></div><div className="spec-cell"><span>{t.critical}</span><strong>{counts.crit}</strong></div><div className="spec-cell"><span>{t.attention}</span><strong>{counts.attn}</strong></div><div className="spec-cell"><span>{t.estimation}</span><strong>{valuation?`${formatDzd(valuation.market)} DA`:'—'}</strong></div><div className="spec-cell"><span>{t.vehicle}</span><strong>{quoteVehicle||vehicle?.data?.model||'—'}</strong></div><div className="spec-cell"><span>{t.wilaya}</span><strong>{displayWilaya(quoteWilaya||vehicle?.wilaya||'—')}</strong></div></div><div className="notice" style={{marginTop:15}}><Info size={14}/><span>{t.paymentDone}</span></div></div>}
       </section>
       <footer className="footer"><div className="footer-inner"><div><strong>Siyarati DZ</strong> · {t.footerMade}</div><div>{t.footerDemo}</div></div></footer>
     </div>

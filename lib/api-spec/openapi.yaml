@@ -24,6 +24,46 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /vin/decode:
+    get:
+      operationId: decodeVin
+      tags: [vehicles]
+      summary: Decode a 17-character VIN with the NHTSA vPIC API
+      description: Proxies the public NHTSA vPIC DecodeVinValuesExtended endpoint and returns the manufacturer data it provides.
+      parameters:
+        - in: query
+          name: vin
+          required: true
+          schema:
+            type: string
+            minLength: 17
+            maxLength: 17
+            pattern: "^[A-HJ-NPR-Z0-9]{17}$"
+      responses:
+        "200":
+          description: Decoded VIN data, including explicit nulls where vPIC has no value.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VinDecodeResponse"
+        "400":
+          description: Invalid VIN.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "502":
+          description: NHTSA vPIC could not return a usable response.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
+        "504":
+          description: NHTSA vPIC did not respond before the request timed out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApiError"
 components:
   schemas:
     HealthStatus:
@@ -33,4 +73,65 @@ components:
           type: string
       required:
         - status
+    VinDecodeResponse:
+      type: object
+      properties:
+        vin:
+          type: string
+        decoded:
+          type: boolean
+        make:
+          type: ["string", "null"]
+        model:
+          type: ["string", "null"]
+        modelYear:
+          type: ["string", "null"]
+        trim:
+          type: ["string", "null"]
+        series:
+          type: ["string", "null"]
+        engine:
+          type: ["string", "null"]
+        fuelType:
+          type: ["string", "null"]
+        transmission:
+          type: ["string", "null"]
+        bodyClass:
+          type: ["string", "null"]
+        assemblyCountry:
+          type: ["string", "null"]
+        assemblyPlant:
+          type: ["string", "null"]
+        safetyEquipment:
+          type: array
+          items:
+            type: string
+        errorCode:
+          type: ["string", "null"]
+        errorMessage:
+          type: ["string", "null"]
+      required:
+        - vin
+        - decoded
+        - make
+        - model
+        - modelYear
+        - trim
+        - series
+        - engine
+        - fuelType
+        - transmission
+        - bodyClass
+        - assemblyCountry
+        - assemblyPlant
+        - safetyEquipment
+        - errorCode
+        - errorMessage
+    ApiError:
+      type: object
+      properties:
+        error:
+          type: string
+      required:
+        - error
 
