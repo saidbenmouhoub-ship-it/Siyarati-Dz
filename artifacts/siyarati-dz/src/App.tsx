@@ -1,14 +1,26 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { getDecodeVinQueryKey, useDecodeVin, type VinDecodeResponse } from '@workspace/api-client-react';
-import { AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Calculator, CarFront, Check, ChevronRight, ClipboardCheck, Copy, FileText, Info, LoaderCircle, LockKeyhole, ShieldCheck, X } from 'lucide-react';
+import { AlertTriangle, ArrowDownRight, ArrowUpRight, BadgeCheck, Calculator, CarFront, Check, ChevronRight, ClipboardCheck, Copy, FileText, Info, LoaderCircle, LockKeyhole, MessageCircle, ShieldCheck, X } from 'lucide-react';
 
 type Lang = 'fr' | 'ar';
 type Status = 'ok' | 'attn' | 'crit';
 type Category = 'engine' | 'body' | 'electronics' | 'documents';
 type Vehicle = { data: VinDecodeResponse | null; series: string; registrationYear: string; wilaya: string };
 type Valuation = { year: number; mileage: number; condition: string; low: number; market: number; high: number };
-type QuoteRequest = { name: string; phone: string; wilaya: string; vehicle: string; cover: string; insurers: string[] };
+type QuoteCoverage = 'thirdSimple' | 'thirdCollision' | 'comprehensive';
+const insurers = ['SAA','CAAT','CIAR','Alliance Assurances','CASH Assurances','Trust Assurances'] as const;
+type Insurer = typeof insurers[number];
+type QuoteRequest = { lastName: string; firstName: string; phone: string; wilaya: string; agency: Insurer; make: string; model: string; year: string; vin: string; cover: QuoteCoverage };
 type PaymentDemo = { method: string; rip: string; unlocked: boolean };
+
+const insurerWhatsappNumbers: Record<Insurer, string> = {
+  SAA: '213560001234',
+  CAAT: '213560902635',
+  CIAR: '213661765379',
+  'Alliance Assurances': '213550685050',
+  'CASH Assurances': '213550123456',
+  'Trust Assurances': '213770123456',
+};
 
 const text = {
   fr: {
@@ -29,8 +41,9 @@ const text = {
     inspectionTitle: 'Votre inspection en 50 points', inspectionIntro: 'Faites le tour du véhicule. Chaque point passe de conforme à attention ou critique.',
     allOk: 'Aucun point renseigné', inspected: 'points vérifiés', okay: 'Conforme', attention: 'Attention', critical: 'Critique', reset: 'Tout réinitialiser',
     categories: { engine: 'Moteur & mécanique', body: 'Carrosserie & châssis', electronics: 'Électricité & confort', documents: 'Documents & historique' },
-    insuranceTitle: 'Comparer les pistes d’assurance', insuranceIntro: 'Préparez une demande indicative. Aucun assureur n’est contacté par cette démonstration.',
-    contactInfo: 'Vos informations', fullName: 'Nom complet', phone: 'Téléphone', vehicle: 'Véhicule', cover: 'Formule souhaitée', thirdParty: 'Tiers', comprehensive: 'Tous risques', providers: 'Assureurs à inclure', requestOffers: 'Afficher les offres simulées', insurerHint: 'Choisissez au moins un assureur.', quoteResults: 'Offres indicatives simulées', annual: 'par an, à titre indicatif', quoteNotice: 'Simulation locale uniquement. Aucune compagnie d’assurance n’a été contactée et ces montants ne sont pas des devis.',
+    insuranceTitle: 'Demander un devis d’assurance', insuranceIntro: 'Choisissez votre agence et préparez une demande avec les informations de votre véhicule.',
+    contactInfo: 'Votre demande', lastName: 'Nom', firstName: 'Prénom', phone: 'Numéro de téléphone', vehicle: 'Véhicule', cover: 'Type de couverture', thirdSimple: 'Tiers Simple', thirdCollision: 'Tiers Collision', comprehensive: 'Tous Risques', agency: 'Agence préférée', requestOffers: 'Envoyer ma demande de devis', quoteResults: 'Résumé de la demande', annual: 'par an, à titre indicatif', quoteNotice: 'Les informations ne seront partagées qu’après ouverture de WhatsApp et confirmation de l’envoi par vos soins.',
+    vehicleDetails: 'Informations du véhicule', agencyHint: 'Choisissez une seule agence. Le lien WhatsApp sera adressé à son contact.', quoteVehicleHint: 'Si vous avez décodé un VIN, ces champs sont préremplis. Vous pouvez les corriger ou saisir le véhicule manuellement.', quoteModalTitle: 'Confirmez votre demande', quoteModalBody: 'WhatsApp va s’ouvrir avec le message prérempli pour l’agence choisie. Vérifiez les détails puis appuyez sur Envoyer dans WhatsApp.', sendViaWhatsapp: 'Envoyer ma demande via WhatsApp', insurer: 'Agence', modelYearLabel: 'Année-modèle', vinOptional: 'VIN (facultatif)', selectAgency: 'Sélectionner une agence',
     reportTitle: 'Le rapport complet, à portée de main', reportBody: 'Débloquez la synthèse d’inspection, les points à négocier et votre fiche véhicule sur cette page.', unlock: 'Débloquer le rapport', unlocked: 'Rapport de démonstration débloqué', unlockedBody: 'Votre synthèse locale est prête. Les données restent sur cette page et ne constituent pas une expertise certifiée.',
     reportSummary: 'Votre synthèse', reportSummaryBody: 'Examinez les éléments signalés pendant la visite, demandez les factures d’entretien et faites contrôler le véhicule par un professionnel indépendant avant achat.',
     footerDemo: 'Le VIN est transmis à NHTSA uniquement pour le décodage. Les autres données de cette démonstration restent locales.', footerMade: 'Des repères utiles, sans fausse promesse.',
@@ -38,7 +51,7 @@ const text = {
     methods: { baridi: 'BaridiMob', edahabia: 'Edahabia', flexy: 'Flexy' }, ripTitle: 'RIP fictif de démonstration', copy: 'Copier', copied: 'Copié', fakeRip: '000-000-000000000000-DEMO',
     payNotice: 'Démo uniquement : aucune donnée de carte, compte ou paiement n’est collectée. Rien ne sera débité. Ce RIP est explicitement fictif.',
     simulatePay: 'Simuler le déblocage', cancel: 'Annuler', paymentDone: 'Déblocage simulé. Aucun paiement réel n’a eu lieu.',
-    invalidVin: 'Le VIN doit contenir exactement 17 caractères alphanumériques (sans I, O ni Q).', invalidRegistration: 'Saisissez la série, l’année et la wilaya.', invalidValuation: 'Vérifiez l’année et le kilométrage.', invalidPhone: 'Saisissez un numéro de téléphone algérien valide.', invalidQuote: 'Complétez vos coordonnées, le véhicule et choisissez au moins un assureur.',
+    invalidVin: 'Le VIN doit contenir exactement 17 caractères alphanumériques (sans I, O ni Q).', invalidRegistration: 'Saisissez la série, l’année et la wilaya.', invalidValuation: 'Vérifiez l’année et le kilométrage.', invalidPhone: 'Saisissez un numéro de téléphone algérien valide.', invalidQuote: 'Complétez votre nom, votre wilaya, l’agence et les informations requises du véhicule.',
     vinLabel: 'VIN', plateLabel: 'Immatriculation', yearLabel: 'Année-modèle', months: 'Mois', simulated: 'SIMULÉ', close: 'Fermer', vehiclePlaceholder: 'Ex. Renault Clio 4 1.5 dCi',
   },
   ar: {
@@ -59,8 +72,9 @@ const text = {
     inspectionTitle: 'قائمة فحص من 50 نقطة', inspectionIntro: 'افحص السيارة نقطةً نقطة. اختر سليم أو انتباه أو حرج لكل بند.',
     allOk: 'لم تسجل أي نقطة', inspected: 'نقطة مفحوصة', okay: 'سليم', attention: 'انتباه', critical: 'حرج', reset: 'إعادة ضبط الكل',
     categories: { engine: 'المحرك والميكانيك', body: 'الهيكل والطلاء', electronics: 'الكهرباء والراحة', documents: 'الوثائق والسجل' },
-    insuranceTitle: 'مقارنة خيارات التأمين', insuranceIntro: 'جهّز طلباً تقديرياً. هذا العرض لا يتواصل مع أي شركة تأمين.',
-    contactInfo: 'بياناتك', fullName: 'الاسم الكامل', phone: 'رقم الهاتف', vehicle: 'السيارة', cover: 'التغطية المطلوبة', thirdParty: 'ضد الغير', comprehensive: 'شامل', providers: 'الشركات المراد تضمينها', requestOffers: 'عرض الأسعار المحاكاة', insurerHint: 'اختر شركة تأمين واحدة على الأقل.', quoteResults: 'عروض تقديرية محاكاة', annual: 'سنوياً، على سبيل التقدير', quoteNotice: 'محاكاة محلية فقط. لم يتم التواصل مع أي شركة تأمين وهذه المبالغ ليست عروض أسعار.',
+    insuranceTitle: 'طلب عرض تأمين', insuranceIntro: 'اختر وكالتك وجهّز طلباً يتضمن معلومات السيارة.',
+    contactInfo: 'طلبك', lastName: 'اللقب', firstName: 'الاسم الشخصي', phone: 'رقم الهاتف', vehicle: 'السيارة', cover: 'نوع التغطية', thirdSimple: 'ضد الغير البسيط', thirdCollision: 'ضد الغير مع التصادم', comprehensive: 'جميع الأخطار', agency: 'الوكالة المفضلة', requestOffers: 'إرسال طلب عرض السعر', quoteResults: 'ملخص الطلب', annual: 'سنوياً، على سبيل التقدير', quoteNotice: 'لن تتم مشاركة المعلومات إلا بعد فتح WhatsApp وتأكيد الإرسال بنفسك.',
+    vehicleDetails: 'معلومات السيارة', agencyHint: 'اختر وكالة واحدة. سيوجه رابط WhatsApp إلى جهة اتصالها.', quoteVehicleHint: 'إذا سبق فك رقم الهيكل، تُملأ هذه الخانات تلقائياً. يمكنك تعديلها أو إدخال السيارة يدوياً.', quoteModalTitle: 'تأكيد الطلب', quoteModalBody: 'سيُفتح WhatsApp برسالة جاهزة للوكالة المختارة. راجع التفاصيل ثم اضغط إرسال داخل WhatsApp.', sendViaWhatsapp: 'إرسال طلبي عبر WhatsApp', insurer: 'الوكالة', modelYearLabel: 'سنة الطراز', vinOptional: 'رقم الهيكل (اختياري)', selectAgency: 'اختر وكالة',
     reportTitle: 'تقرير شامل بين يديك', reportBody: 'افتح ملخص الفحص والنقاط التي تستحق التفاوض وبطاقة السيارة على هذه الصفحة.', unlock: 'فتح التقرير', unlocked: 'تم فتح التقرير التجريبي', unlockedBody: 'ملخصك المحلي جاهز. تبقى البيانات على هذه الصفحة ولا تُعدّ خبرة معتمدة.',
     reportSummary: 'ملخصك', reportSummaryBody: 'راجع النقاط المسجلة خلال الزيارة، واطلب فواتير الصيانة، واستعن بفني مستقل لفحص السيارة قبل الشراء.',
     footerDemo: 'يُرسل رقم الهيكل إلى NHTSA لغرض فكّه فقط. تبقى بقية بيانات هذا العرض التجريبي محلية.', footerMade: 'مؤشرات مفيدة بلا وعود زائفة.',
@@ -68,7 +82,7 @@ const text = {
     methods: { baridi: 'بريدي موب', edahabia: 'الذهبية', flexy: 'فليكسي' }, ripTitle: 'RIP تجريبي غير حقيقي', copy: 'نسخ', copied: 'تم النسخ', fakeRip: '000-000-000000000000-DEMO',
     payNotice: 'للتجربة فقط: لا نجمع بيانات بطاقة أو حساب أو دفع. لن يتم خصم أي مبلغ. رقم RIP خيالي بوضوح.',
     simulatePay: 'محاكاة فتح التقرير', cancel: 'إلغاء', paymentDone: 'تمت محاكاة الفتح. لم يحدث أي دفع فعلي.',
-    invalidVin: 'يجب أن يتكون رقم الهيكل من 17 خانة حرفية ورقمية (من دون I أو O أو Q).', invalidRegistration: 'أدخل السلسلة والسنة والولاية.', invalidValuation: 'تحقق من السنة والمسافة المقطوعة.', invalidPhone: 'أدخل رقم هاتف جزائرياً صحيحاً.', invalidQuote: 'أكمل بياناتك والسيارة واختر شركة واحدة على الأقل.',
+    invalidVin: 'يجب أن يتكون رقم الهيكل من 17 خانة حرفية ورقمية (من دون I أو O أو Q).', invalidRegistration: 'أدخل السلسلة والسنة والولاية.', invalidValuation: 'تحقق من السنة والمسافة المقطوعة.', invalidPhone: 'أدخل رقم هاتف جزائرياً صحيحاً.', invalidQuote: 'أكمل الاسم والولاية والوكالة ومعلومات السيارة المطلوبة.',
     vinLabel: 'رقم الهيكل', plateLabel: 'التسجيل', yearLabel: 'سنة الطراز', months: 'شهر', simulated: 'محاكاة', close: 'إغلاق', vehiclePlaceholder: 'مثال: Renault Clio 4 1.5 dCi',
   },
 } as const;
@@ -77,7 +91,6 @@ const wilayas = ['Adrar','Chlef','Laghouat','Oum El Bouaghi','Batna','Béjaïa',
 const wilayaArabic: Record<string,string> = {
   Adrar:'أدرار',Chlef:'الشلف',Laghouat:'الأغواط','Oum El Bouaghi':'أم البواقي',Batna:'باتنة',Béjaïa:'بجاية',Biskra:'بسكرة',Béchar:'بشار',Blida:'البليدة',Bouira:'البويرة',Tamanrasset:'تمنراست',Tébessa:'تبسة',Tlemcen:'تلمسان',Tiaret:'تيارت','Tizi Ouzou':'تيزي وزو',Alger:'الجزائر',Djelfa:'الجلفة',Jijel:'جيجل',Sétif:'سطيف',Saïda:'سعيدة',Skikda:'سكيكدة','Sidi Bel Abbès':'سيدي بلعباس',Annaba:'عنابة',Guelma:'قالمة',Constantine:'قسنطينة',Médéa:'المدية',Mostaganem:'مستغانم','M’Sila':'المسيلة',Mascara:'معسكر',Ouargla:'ورقلة',Oran:'وهران','El Bayadh':'البيض',Illizi:'إليزي','Bordj Bou Arréridj':'برج بوعريريج',Boumerdès:'بومرداس','El Tarf':'الطارف',Tindouf:'تندوف',Tissemsilt:'تيسمسيلت','El Oued':'الوادي',Khenchela:'خنشلة','Souk Ahras':'سوق أهراس',Tipaza:'تيبازة',Mila:'ميلة','Aïn Defla':'عين الدفلى',Naâma:'النعامة','Aïn Témouchent':'عين تموشنت',Ghardaïa:'غرداية',Relizane:'غليزان',Timimoun:'تيميمون','Bordj Badji Mokhtar':'برج باجي مختار','Ouled Djellal':'أولاد جلال','Béni Abbès':'بني عباس','In Salah':'عين صالح','In Guezzam':'عين قزام',Touggourt:'تقرت',Djanet:'جانت','El M’Ghair':'المغير','El Meniaa':'المنيعة'
 };
-const insurers = ['SAA','CAAT','CIAR','Alliance Assurances','Cash','Trust'];
 const categoryItems: Record<Category, string[]> = {
   engine: ['Démarrage à froid','Ralenti stable','Aucun voyant moteur','Pas de fumée anormale','Niveau d’huile correct','Absence de fuite d’huile','Liquide de refroidissement propre','Température moteur stable','Boîte de vitesses fluide','Embrayage sans patinage','Freinage sans vibration','Direction sans jeu','Suspension sans bruit','Échappement en bon état'],
   body: ['Alignement des panneaux','Peinture uniforme','Absence de corrosion visible','Bas de caisse sans choc','Longerons sans déformation','Pare-brise sans fissure','Vitres en bon état','Portières bien alignées','Coffre ferme correctement','Capot ferme correctement','Pneus usure régulière','Profondeur des pneus correcte','Jantes sans dommage majeur','Éclairage extérieur intact'],
@@ -93,8 +106,8 @@ const categoryArabic: Record<Category, string[]> = {
 const statuses: Status[] = ['ok','attn','crit'];
 const navIds = ['vehicle','valuation','inspection','insurance','report'] as const;
 
-function InputField({ label, name, value, onChange, placeholder, type = 'text', min, max, testId, dir }: { label:string;name:string;value:string;onChange:(v:string)=>void;placeholder?:string;type?:string;min?:number;max?:number;testId:string;dir?:string }) {
-  return <div className="field"><label htmlFor={name}>{label}</label><input className="input" id={name} name={name} type={type} min={min} max={max} value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)} data-testid={testId} dir={dir}/></div>;
+function InputField({ label, name, value, onChange, placeholder, type = 'text', min, max, testId, dir, required, autoComplete, maxLength }: { label:string;name:string;value:string;onChange:(v:string)=>void;placeholder?:string;type?:string;min?:number;max?:number;testId:string;dir?:string;required?:boolean;autoComplete?:string;maxLength?:number }) {
+  return <div className="field"><label htmlFor={name}>{label}</label><input className="input" id={name} name={name} type={type} min={min} max={max} value={value} placeholder={placeholder} onChange={e=>onChange(e.target.value)} data-testid={testId} dir={dir} required={required} autoComplete={autoComplete} maxLength={maxLength}/></div>;
 }
 
 function App() {
@@ -104,9 +117,20 @@ function App() {
   const decodeSequence = useRef(0);
   const [valYear,setValYear] = useState('2019'); const [mileage,setMileage] = useState('85000'); const [condition,setCondition] = useState('good'); const [valuation,setValuation] = useState<Valuation|null>(null); const [valuationError,setValuationError] = useState('');
   const [checklist,setChecklist] = useState<Record<string,Status>>({});
-  const [quoteName,setQuoteName] = useState(''); const [quotePhone,setQuotePhone] = useState(''); const [quoteWilaya,setQuoteWilaya] = useState(''); const [quoteVehicle,setQuoteVehicle] = useState(''); const [cover,setCover] = useState('third'); const [selectedInsurers,setSelectedInsurers] = useState<string[]>([]); const [quoteError,setQuoteError] = useState(''); const [quoteRequest,setQuoteRequest] = useState<QuoteRequest|null>(null);
+  const [quoteLastName,setQuoteLastName] = useState(''); const [quoteFirstName,setQuoteFirstName] = useState(''); const [quotePhone,setQuotePhone] = useState(''); const [quoteWilaya,setQuoteWilaya] = useState('');
+  const [quoteMake,setQuoteMake] = useState(''); const [quoteModel,setQuoteModel] = useState(''); const [quoteYear,setQuoteYear] = useState(''); const [quoteVin,setQuoteVin] = useState('');
+  const [cover,setCover] = useState<QuoteCoverage>('thirdSimple'); const [selectedInsurer,setSelectedInsurer] = useState<Insurer|''>('');
+  const [quoteError,setQuoteError] = useState(''); const [quoteRequest,setQuoteRequest] = useState<QuoteRequest|null>(null); const [quoteConfirmationOpen,setQuoteConfirmationOpen] = useState(false);
   const [modalOpen,setModalOpen] = useState(false); const [paymentMethod,setPaymentMethod] = useState('baridi'); const [copied,setCopied] = useState(false); const [payment,setPayment] = useState<PaymentDemo|null>(null);
   const t = text[lang], isAr = lang === 'ar';
+  useEffect(() => {
+    const decoded = vehicle?.data;
+    if (!decoded?.decoded) return;
+    setQuoteMake(decoded.make ?? '');
+    setQuoteModel(decoded.model ?? '');
+    setQuoteYear(decoded.modelYear ?? '');
+    setQuoteVin(decoded.vin);
+  }, [vehicle?.data?.decoded, vehicle?.data?.make, vehicle?.data?.model, vehicle?.data?.modelYear, vehicle?.data?.vin]);
   const counts = useMemo(()=>statuses.reduce((out,status)=>{out[status]=Object.values(checklist).filter(s=>s===status).length;return out;},{ok:0,attn:0,crit:0} as Record<Status,number>),[checklist]);
   const allItems = useMemo(()=>Object.entries(categoryItems).flatMap(([category,items])=>items.map((label,index)=>({id:`${category}-${index+1}`,category:category as Category,label,arabic:categoryArabic[category as Category][index]}))),[]);
   const totalPoints = allItems.length;
@@ -114,16 +138,45 @@ function App() {
   const score = Math.round((counts.ok + counts.attn*.55 + counts.crit*.1) / totalPoints * 100);
   const formatDzd = (v:number) => `${Math.round(v/1000).toLocaleString('fr-FR')} 000`;
   const displayWilaya = (name:string) => isAr ? (wilayaArabic[name]||name) : name;
+  const insuranceWilayaLabel = (code:string) => {
+    const name = wilayas[Number(code) - 1];
+    return name ? `${code.padStart(2,'0')} · ${displayWilaya(name)}` : t.notProvided;
+  };
+  const coverageLabel = (coverage:QuoteCoverage) => coverage === 'thirdSimple' ? t.thirdSimple : coverage === 'thirdCollision' ? t.thirdCollision : t.comprehensive;
+  function clearQuoteRequest() {
+    setQuoteRequest(null);
+    setQuoteConfirmationOpen(false);
+    setQuoteError('');
+  }
+  function buildWhatsAppUrl(request:QuoteRequest) {
+    const message = [
+      'Siyarati DZ · ' + t.requestOffers,
+      '',
+      `${t.lastName}: ${request.lastName}`,
+      `${t.firstName}: ${request.firstName}`,
+      `${t.phone}: ${request.phone}`,
+      `${t.wilaya}: ${insuranceWilayaLabel(request.wilaya)}`,
+      `${t.insurer}: ${request.agency}`,
+      `${t.make}: ${request.make}`,
+      `${t.model}: ${request.model}`,
+      `${t.modelYearLabel}: ${request.year}`,
+      ...(request.vin ? [`${t.vinLabel}: ${request.vin}`] : []),
+      `${t.cover}: ${coverageLabel(request.cover)}`,
+    ].join('\n');
+    return `https://wa.me/${insurerWhatsappNumbers[request.agency]}?text=${encodeURIComponent(message)}`;
+  }
   const normalizedVin = vin.trim().toUpperCase();
   const vinQuery = useDecodeVin(
     { vin: normalizedVin },
     { query: { enabled: false, queryKey: getDecodeVinQueryKey({ vin: normalizedVin }), retry: false } },
   );
-  function clearVehicleResult() {
+  function clearVehicleResult(clearQuoteVehicle = false) {
     decodeSequence.current += 1;
     setVehicle(null);
     setVehicleError('');
     setDecodeError('');
+    clearQuoteRequest();
+    if(clearQuoteVehicle){setQuoteMake('');setQuoteModel('');setQuoteYear('');setQuoteVin('');}
   }
   async function identifyVehicle(e:React.FormEvent<HTMLFormElement>) {
     if(vinQuery.isFetching)return;
@@ -154,11 +207,21 @@ function App() {
   function setItemStatus(id:string,status:Status) { setChecklist(prev=>({...prev,[id]:status})); }
   function submitQuote(e:React.FormEvent<HTMLFormElement>) {
     e.preventDefault();setQuoteError('');
-    const validPhone=/^(?:\+213|0)(?:5|6|7)\d{8}$/.test(quotePhone.replace(/[ .-]/g,''));
-    if(!quoteName.trim()||!validPhone||!quoteWilaya||!quoteVehicle.trim()||selectedInsurers.length===0){setQuoteError(validPhone||!quotePhone?t.invalidQuote:t.invalidPhone);return;}
-    setQuoteRequest({name:quoteName,phone:quotePhone,wilaya:quoteWilaya,vehicle:quoteVehicle,cover,insurers:selectedInsurers});
+    const normalizedPhone=quotePhone.trim().replace(/[ .()-]/g,'');
+    const validPhone=/^(?:\+213|0)(?:5|6|7)\d{8}$/.test(normalizedPhone);
+    if(!validPhone){setQuoteError(t.invalidPhone);return;}
+    const wilayaNumber=Number(quoteWilaya);
+    const modelYear=Number(quoteYear);
+    const validWilaya=Number.isInteger(wilayaNumber)&&wilayaNumber>=1&&wilayaNumber<=58;
+    const validYear=Number.isInteger(modelYear)&&modelYear>=1886&&modelYear<=new Date().getFullYear()+1;
+    if(!quoteLastName.trim()||!quoteFirstName.trim()||!validWilaya||!selectedInsurer||!quoteMake.trim()||!quoteModel.trim()||!validYear){setQuoteError(t.invalidQuote);return;}
+    if(quoteVin.trim()&&!/^[A-HJ-NPR-Z0-9]{17}$/.test(quoteVin.trim().toUpperCase())){setQuoteError(t.invalidVin);return;}
+    setQuoteRequest({
+      lastName:quoteLastName.trim(),firstName:quoteFirstName.trim(),phone:quotePhone.trim(),wilaya:quoteWilaya,agency:selectedInsurer,
+      make:quoteMake.trim(),model:quoteModel.trim(),year:String(modelYear),vin:quoteVin.trim().toUpperCase(),cover,
+    });
+    setQuoteConfirmationOpen(true);
   }
-  function toggleInsurer(name:string) { setSelectedInsurers(prev=>prev.includes(name)?prev.filter(x=>x!==name):[...prev,name]);setQuoteRequest(null); }
   async function copyRip() { try { await navigator.clipboard.writeText(t.fakeRip);setCopied(true);window.setTimeout(()=>setCopied(false),1800); } catch { setCopied(false); } }
   function completePayment() { setPayment({method:paymentMethod,rip:paymentMethod==='baridi'?t.fakeRip:'',unlocked:true});setModalOpen(false); }
   function openModal() { setModalOpen(true); }
@@ -196,7 +259,7 @@ function App() {
           <div className="panel-label">{t.vinLabel} + {t.plateLabel}</div>
           <form onSubmit={identifyVehicle} noValidate>
             <p className="helper">{t.vinOrRegistration}</p><div className="form-grid">
-              <div className="field full"><label htmlFor="vin">{t.vin}</label><input className="input" id="vin" value={vin} onChange={e=>{setVin(e.target.value.toUpperCase());clearVehicleResult()}} placeholder={t.vinPlaceholder} maxLength={17} autoCapitalize="characters" data-testid="input-vin" aria-describedby="nhtsa-privacy-note"/></div>
+              <div className="field full"><label htmlFor="vin">{t.vin}</label><input className="input" id="vin" value={vin} onChange={e=>{setVin(e.target.value.toUpperCase());clearVehicleResult(true)}} placeholder={t.vinPlaceholder} maxLength={17} autoCapitalize="characters" data-testid="input-vin" aria-describedby="nhtsa-privacy-note"/></div>
               <InputField label={t.series} name="series" value={series} onChange={v=>{setSeries(v);clearVehicleResult()}} placeholder={t.seriesPlaceholder} testId="input-registration-series"/>
               <InputField label={t.registrationYear} name="registration-year" value={carYear} onChange={v=>{setCarYear(v);clearVehicleResult()}} type="number" min={1960} max={new Date().getFullYear()} testId="input-registration-year"/>
               <div className="field full"><label htmlFor="car-wilaya">{t.wilaya}</label><select className="input" id="car-wilaya" value={carWilaya} onChange={e=>{setCarWilaya(e.target.value);clearVehicleResult()}} data-testid="select-registration-wilaya"><option value="">{t.choose}</option>{wilayas.map(w=><option key={w} value={w}>{displayWilaya(w)}</option>)}</select></div>
@@ -257,16 +320,62 @@ function App() {
 
       <section className="section" id="insurance">
         <div className="section-heading"><div><div className="section-index">04 / {t.navInsurance.toUpperCase()}</div><h2>{t.insuranceTitle}</h2></div><p className="section-intro">{t.insuranceIntro}</p></div>
-        <div className="insurance-grid"><form className="panel" onSubmit={submitQuote} noValidate><div className="panel-label">{t.contactInfo}</div><div className="form-grid">
-          <InputField label={t.fullName} name="quote-name" value={quoteName} onChange={v=>{setQuoteName(v);setQuoteRequest(null)}} placeholder={isAr?'الاسم واللقب':'Nom et prénom'} testId="input-quote-name"/>
-          <InputField label={t.phone} name="quote-phone" value={quotePhone} onChange={v=>{setQuotePhone(v);setQuoteRequest(null)}} placeholder="05 55 12 34 56" type="tel" testId="input-quote-phone" dir="ltr"/>
-          <div className="field"><label htmlFor="quote-wilaya">{t.wilaya}</label><select className="input" id="quote-wilaya" value={quoteWilaya} onChange={e=>{setQuoteWilaya(e.target.value);setQuoteRequest(null)}} data-testid="select-quote-wilaya"><option value="">{t.choose}</option>{wilayas.map(w=><option key={w} value={w}>{displayWilaya(w)}</option>)}</select></div>
-          <InputField label={t.vehicle} name="quote-vehicle" value={quoteVehicle} onChange={v=>{setQuoteVehicle(v);setQuoteRequest(null)}} placeholder={t.vehiclePlaceholder} testId="input-quote-vehicle"/>
-          <div className="field full"><label htmlFor="cover">{t.cover}</label><select className="input" id="cover" value={cover} onChange={e=>{setCover(e.target.value);setQuoteRequest(null)}} data-testid="select-cover"><option value="third">{t.thirdParty}</option><option value="comprehensive">{t.comprehensive}</option></select></div>
-          <div className="field full"><label>{t.providers}</label><div className="insurers">{insurers.map(name=><label className="insurer-option" key={name}><input type="checkbox" checked={selectedInsurers.includes(name)} onChange={()=>toggleInsurer(name)} data-testid={`checkbox-insurer-${name.toLowerCase().replaceAll(' ','-')}`}/><span>{name}</span></label>)}</div><span className="helper">{t.insurerHint}</span></div>
-        </div>{quoteError&&<p className="error-text" role="alert" data-testid="error-quote">{quoteError}</p>}<div className="form-actions"><button className="btn btn-primary" type="submit" data-testid="button-request-quote"><ShieldCheck size={15}/>{t.requestOffers}</button></div></form>
-          <div className="panel"><div className="panel-label">{t.quoteResults} · {t.simulated}</div>
-            {quoteRequest?<><div className="result-title"><Check size={15}/>{quoteRequest.name} · {quoteRequest.vehicle}</div>{quoteRequest.insurers.map((name,index)=>{const base=quoteRequest.cover==='comprehensive'?68000:24500;const price=base+(index*7350)+(quoteRequest.wilaya==='Alger'?4900:0);return <div className="offer-card" key={name} data-testid={`offer-${name.toLowerCase().replaceAll(' ','-')}`}><div className="offer-line"><span>{name}</span><strong>{price.toLocaleString('fr-FR')} DA</strong></div><div className="offer-line"><span>{quoteRequest.cover==='comprehensive'?t.comprehensive:t.thirdParty} · {t.wilaya}</span><span>{displayWilaya(quoteRequest.wilaya)}</span></div><div className="helper">{t.annual}</div></div>})}</>:<><p className="section-intro" style={{maxWidth:'none'}}>{isAr?'أكمل الطلب لعرض أسعار محاكاة تساعدك على تكوين فكرة أولية.':'Complétez le formulaire pour découvrir des montants simulés et préparer vos questions.'}</p><div className="notice warn" style={{marginTop:17}}><AlertTriangle size={14}/><span>{t.quoteNotice}</span></div></>}
+        <div className="insurance-grid">
+          <form className="panel" onSubmit={submitQuote} noValidate>
+            <div className="panel-label">{t.contactInfo}</div>
+            <div className="form-grid">
+              <InputField label={t.lastName} name="quote-last-name" value={quoteLastName} onChange={v=>{setQuoteLastName(v);clearQuoteRequest()}} testId="input-quote-last-name" autoComplete="family-name" required/>
+              <InputField label={t.firstName} name="quote-first-name" value={quoteFirstName} onChange={v=>{setQuoteFirstName(v);clearQuoteRequest()}} testId="input-quote-first-name" autoComplete="given-name" required/>
+              <InputField label={t.phone} name="quote-phone" value={quotePhone} onChange={v=>{setQuotePhone(v);clearQuoteRequest()}} placeholder="05 55 12 34 56" type="tel" testId="input-quote-phone" dir="ltr" autoComplete="tel" required/>
+              <div className="field">
+                <label htmlFor="quote-wilaya">{t.wilaya} (01–58)</label>
+                <select className="input" id="quote-wilaya" value={quoteWilaya} onChange={e=>{setQuoteWilaya(e.target.value);clearQuoteRequest()}} data-testid="select-quote-wilaya" required>
+                  <option value="">{t.choose}</option>
+                  {wilayas.map((name,index)=>{const code=String(index+1).padStart(2,'0');return <option key={code} value={code}>{code} · {displayWilaya(name)}</option>})}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="quote-agency">{t.agency}</label>
+                <select className="input" id="quote-agency" value={selectedInsurer} onChange={e=>{setSelectedInsurer(e.target.value as Insurer|'');clearQuoteRequest()}} data-testid="select-quote-agency" required>
+                  <option value="">{t.selectAgency}</option>
+                  {insurers.map(name=><option key={name} value={name}>{name}</option>)}
+                </select>
+                <span className="helper">{t.agencyHint}</span>
+              </div>
+              <div className="field full">
+                <label htmlFor="cover">{t.cover}</label>
+                <select className="input" id="cover" value={cover} onChange={e=>{setCover(e.target.value as QuoteCoverage);clearQuoteRequest()}} data-testid="select-cover">
+                  <option value="thirdSimple">{t.thirdSimple}</option>
+                  <option value="thirdCollision">{t.thirdCollision}</option>
+                  <option value="comprehensive">{t.comprehensive}</option>
+                </select>
+              </div>
+              <div className="field full">
+                <h3 style={{fontSize:14,margin:'3px 0 0'}}>{t.vehicleDetails}</h3>
+                <span className="helper">{t.quoteVehicleHint}</span>
+              </div>
+              <InputField label={t.make} name="quote-make" value={quoteMake} onChange={v=>{setQuoteMake(v);clearQuoteRequest()}} placeholder={isAr?'العلامة':'Marque'} testId="input-quote-make" required/>
+              <InputField label={t.model} name="quote-model" value={quoteModel} onChange={v=>{setQuoteModel(v);clearQuoteRequest()}} placeholder={isAr?'الطراز':'Modèle'} testId="input-quote-model" required/>
+              <InputField label={t.modelYearLabel} name="quote-year" value={quoteYear} onChange={v=>{setQuoteYear(v);clearQuoteRequest()}} type="number" min={1886} max={new Date().getFullYear()+1} placeholder="2020" testId="input-quote-year" required/>
+              <InputField label={t.vinOptional} name="quote-vin" value={quoteVin} onChange={v=>{setQuoteVin(v.toUpperCase());clearQuoteRequest()}} placeholder="17 caractères" testId="input-quote-vin" dir="ltr" maxLength={17}/>
+            </div>
+            {quoteError&&<p className="error-text" role="alert" data-testid="error-quote">{quoteError}</p>}
+            <div className="form-actions"><button className="btn btn-primary" type="submit" data-testid="button-request-quote"><ShieldCheck size={15}/>{t.requestOffers}</button></div>
+          </form>
+          <div className="panel" aria-live="polite" data-testid="preview-quote">
+            <div className="panel-label">{t.quoteResults}</div>
+            <div className="result-title"><ShieldCheck size={16}/><span>{selectedInsurer||t.selectAgency} · {coverageLabel(cover)}</span></div>
+            <div className="spec-grid">
+              <div className="spec-cell"><span>{t.lastName}</span><strong>{quoteLastName||t.notProvided}</strong></div>
+              <div className="spec-cell"><span>{t.firstName}</span><strong>{quoteFirstName||t.notProvided}</strong></div>
+              <div className="spec-cell"><span>{t.phone}</span><strong dir="ltr">{quotePhone||t.notProvided}</strong></div>
+              <div className="spec-cell"><span>{t.wilaya}</span><strong>{quoteWilaya?insuranceWilayaLabel(quoteWilaya):t.notProvided}</strong></div>
+              <div className="spec-cell"><span>{t.make}</span><strong>{quoteMake||t.notProvided}</strong></div>
+              <div className="spec-cell"><span>{t.model}</span><strong>{quoteModel||t.notProvided}</strong></div>
+              <div className="spec-cell"><span>{t.modelYearLabel}</span><strong>{quoteYear||t.notProvided}</strong></div>
+              {quoteVin&&<div className="spec-cell" style={{gridColumn:'1/-1'}}><span>{t.vinLabel}</span><strong dir="ltr">{quoteVin}</strong></div>}
+            </div>
+            <div className="notice" style={{marginTop:17}}><Info size={15}/><span>{t.quoteNotice}</span></div>
           </div>
         </div>
       </section>
@@ -274,10 +383,30 @@ function App() {
       <section className="section" id="report">
         <div className="section-heading"><div><div className="section-index">05 / {t.navReport.toUpperCase()}</div><h2>{t.reportTitle}</h2></div><p className="section-intro">{t.reportBody}</p></div>
         {!payment?.unlocked?<div className="unlock-banner"><div className="unlock-copy"><strong><LockKeyhole size={15} style={{verticalAlign:'middle',marginInlineEnd:7}}/>{t.reportTitle}</strong><span>{t.reportBody}</span></div><button type="button" className="btn btn-primary" onClick={openModal} data-testid="button-open-payment">{t.unlock}<ArrowUpRight size={14}/></button></div>:
-        <div className="report-unlocked" aria-live="polite" data-testid="status-report-unlocked"><div className="result-title"><BadgeCheck size={18}/>{t.unlocked}</div><p>{t.unlockedBody}</p><h3><FileText size={16} style={{verticalAlign:'middle',marginInlineEnd:8}}/>{t.reportSummary}</h3><p>{t.reportSummaryBody}</p><div className="spec-grid"><div className="spec-cell"><span>{t.inspected}</span><strong>{inspectedCount} / {totalPoints}</strong></div><div className="spec-cell"><span>{t.critical}</span><strong>{counts.crit}</strong></div><div className="spec-cell"><span>{t.attention}</span><strong>{counts.attn}</strong></div><div className="spec-cell"><span>{t.estimation}</span><strong>{valuation?`${formatDzd(valuation.market)} DA`:'—'}</strong></div><div className="spec-cell"><span>{t.vehicle}</span><strong>{quoteVehicle||vehicle?.data?.model||'—'}</strong></div><div className="spec-cell"><span>{t.wilaya}</span><strong>{displayWilaya(quoteWilaya||vehicle?.wilaya||'—')}</strong></div></div><div className="notice" style={{marginTop:15}}><Info size={14}/><span>{t.paymentDone}</span></div></div>}
+        <div className="report-unlocked" aria-live="polite" data-testid="status-report-unlocked"><div className="result-title"><BadgeCheck size={18}/>{t.unlocked}</div><p>{t.unlockedBody}</p><h3><FileText size={16} style={{verticalAlign:'middle',marginInlineEnd:8}}/>{t.reportSummary}</h3><p>{t.reportSummaryBody}</p><div className="spec-grid"><div className="spec-cell"><span>{t.inspected}</span><strong>{inspectedCount} / {totalPoints}</strong></div><div className="spec-cell"><span>{t.critical}</span><strong>{counts.crit}</strong></div><div className="spec-cell"><span>{t.attention}</span><strong>{counts.attn}</strong></div><div className="spec-cell"><span>{t.estimation}</span><strong>{valuation?`${formatDzd(valuation.market)} DA`:'—'}</strong></div><div className="spec-cell"><span>{t.vehicle}</span><strong>{[quoteMake,quoteModel].filter(Boolean).join(' ')||vehicle?.data?.model||'—'}</strong></div><div className="spec-cell"><span>{t.wilaya}</span><strong>{quoteWilaya?insuranceWilayaLabel(quoteWilaya):displayWilaya(vehicle?.wilaya||'—')}</strong></div></div><div className="notice" style={{marginTop:15}}><Info size={14}/><span>{t.paymentDone}</span></div></div>}
       </section>
       <footer className="footer"><div className="footer-inner"><div><strong>Siyarati DZ</strong> · {t.footerMade}</div><div>{t.footerDemo}</div></div></footer>
     </div>
+    {quoteConfirmationOpen&&quoteRequest&&<div className="modal-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setQuoteConfirmationOpen(false)}}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="quote-confirmation-title" data-testid="dialog-quote-confirmation">
+      <div className="modal-head"><div><h3 id="quote-confirmation-title">{t.quoteModalTitle}</h3><p>{t.quoteModalBody}</p></div><button className="icon-button" type="button" aria-label={t.close} onClick={()=>setQuoteConfirmationOpen(false)} data-testid="button-close-quote-confirmation"><X size={16}/></button></div>
+      <div className="spec-grid">
+        <div className="spec-cell"><span>{t.lastName}</span><strong>{quoteRequest.lastName}</strong></div>
+        <div className="spec-cell"><span>{t.firstName}</span><strong>{quoteRequest.firstName}</strong></div>
+        <div className="spec-cell"><span>{t.phone}</span><strong dir="ltr">{quoteRequest.phone}</strong></div>
+        <div className="spec-cell"><span>{t.wilaya}</span><strong>{insuranceWilayaLabel(quoteRequest.wilaya)}</strong></div>
+        <div className="spec-cell"><span>{t.insurer}</span><strong>{quoteRequest.agency}</strong></div>
+        <div className="spec-cell"><span>{t.cover}</span><strong>{coverageLabel(quoteRequest.cover)}</strong></div>
+        <div className="spec-cell"><span>{t.make}</span><strong>{quoteRequest.make}</strong></div>
+        <div className="spec-cell"><span>{t.model}</span><strong>{quoteRequest.model}</strong></div>
+        <div className="spec-cell"><span>{t.modelYearLabel}</span><strong>{quoteRequest.year}</strong></div>
+        {quoteRequest.vin&&<div className="spec-cell" style={{gridColumn:'1/-1'}}><span>{t.vinLabel}</span><strong dir="ltr">{quoteRequest.vin}</strong></div>}
+      </div>
+      <div className="notice" style={{marginTop:15}}><Info size={15}/><span>{t.quoteNotice}</span></div>
+      <div className="modal-footer">
+        <button type="button" className="btn btn-quiet" onClick={()=>setQuoteConfirmationOpen(false)} data-testid="button-cancel-quote-confirmation">{t.cancel}</button>
+        <a className="btn btn-primary" href={buildWhatsAppUrl(quoteRequest)} target="_blank" rel="noopener noreferrer" data-testid="button-send-whatsapp"><MessageCircle size={15}/>{t.sendViaWhatsapp}<ArrowUpRight size={14}/></a>
+      </div>
+    </div></div>}
     {modalOpen&&<div className="modal-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)setModalOpen(false)}}><div className="modal" role="dialog" aria-modal="true" aria-labelledby="payment-title">
       <div className="modal-head"><div><h3 id="payment-title">{t.modalTitle}</h3><p>{t.modalSubtitle}</p></div><button className="icon-button" type="button" aria-label={t.close} onClick={()=>setModalOpen(false)} data-testid="button-close-payment"><X size={16}/></button></div>
       <div className="panel-label">{isAr?'اختر طريقة':'MODE DE DÉMONSTRATION'}</div>
